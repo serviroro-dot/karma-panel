@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Karma · Centralita — Panel de operador</title>
+</head>
+<body>
+<style>
+  :root {
+    color-scheme: light;
+    --page:        #f2f5f8;
+    --card:        #fbfcfd;
+    --card-2:      #eef2f6;
+    --ink:         #101418;
+    --ink-2:       #4c5763;
+    --ink-3:       #8794a1;
+    --line:        #dfe5eb;
+    --accent:      #0e7f93;
+    --accent-ink:  #ffffff;
+    --serie-1:     #2a78d6;
+    --serie-2:     #eb6834;
+    --ok:          #0ca30c;
+    --warn:        #fab219;
+    --busy:        #d03b3b;
+    --dnd:         #ec835a;
+    --off:         #8794a1;
+    --grid:        #e4e8ed;
+    --shadow:      0 1px 2px rgba(16,20,24,.06), 0 4px 14px rgba(16,20,24,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page:   #0e1216;
+      --card:   #161c22;
+      --card-2: #1d242c;
+      --ink:    #edf2f6;
+      --ink-2:  #9aa7b3;
+      --ink-3:  #66727e;
+      --line:   #262e37;
+      --accent: #45c1d8;
+      --accent-ink: #06262c;
+      --serie-1: #3987e5;
+      --serie-2: #d95926;
+      --grid:   #232b33;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.3);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page:   #0e1216;
+    --card:   #161c22;
+    --card-2: #1d242c;
+    --ink:    #edf2f6;
+    --ink-2:  #9aa7b3;
+    --ink-3:  #66727e;
+    --line:   #262e37;
+    --accent: #45c1d8;
+    --accent-ink: #06262c;
+    --serie-1: #3987e5;
+    --serie-2: #d95926;
+    --grid:   #232b33;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.3);
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --page:   #f2f5f8;
+    --card:   #fbfcfd;
+    --card-2: #eef2f6;
+    --ink:    #101418;
+    --ink-2:  #4c5763;
+    --ink-3:  #8794a1;
+    --line:   #dfe5eb;
+    --accent: #0e7f93;
+    --accent-ink: #ffffff;
+    --serie-1: #2a78d6;
+    --serie-2: #eb6834;
+    --grid:   #e4e8ed;
+    --shadow: 0 1px 2px rgba(16,20,24,.06), 0 4px 14px rgba(16,20,24,.05);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+
+  .topbar {
+    display: flex; align-items: center; gap: 16px;
+    padding: 14px 24px;
+    background: var(--card);
+    border-bottom: 1px solid var(--line);
+    position: sticky; top: 0; z-index: 5;
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; }
+  .brand strong { font-size: 17px; letter-spacing: .02em; }
+  .brand span { color: var(--ink-2); font-size: 13px; }
+  .topbar .spacer { flex: 1; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 4px 12px; border-radius: 999px;
+    font-size: 12.5px; font-weight: 600;
+    background: var(--card-2); color: var(--ink-2);
+    border: 1px solid var(--line);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .dot.ok   { background: var(--ok); }
+  .dot.warn { background: var(--warn); }
+  .dot.busy { background: var(--busy); }
+  .dot.dnd  { background: var(--dnd); }
+  .dot.off  { background: var(--off); }
+  @media (prefers-reduced-motion: no-preference) {
+    .dot.live { animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 50% { opacity: .45; } }
+  }
+  #reloj { font-size: 15px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+  main { max-width: 1180px; margin: 0 auto; padding: 22px 24px 48px; display: grid; gap: 18px; }
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+  .kpi {
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px 12px; box-shadow: var(--shadow);
+  }
+  .kpi .lbl { font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); }
+  .kpi .val { font-size: 30px; font-weight: 700; line-height: 1.15; margin-top: 4px; }
+  .kpi .sub { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; }
+  .kpi .sub .up   { color: var(--ok); font-weight: 600; }
+  .kpi .sub .down { color: var(--busy); font-weight: 600; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    box-shadow: var(--shadow); padding: 16px 18px 18px;
+  }
+  .card h2 {
+    margin: 0 0 12px; font-size: 12px; font-weight: 700;
+    letter-spacing: .09em; text-transform: uppercase; color: var(--ink-2);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card h2 .count {
+    background: var(--card-2); border: 1px solid var(--line); border-radius: 999px;
+    padding: 1px 8px; font-size: 11.5px; color: var(--ink-2); letter-spacing: 0;
+  }
+
+  .cols { display: grid; grid-template-columns: 3fr 2fr; gap: 18px; align-items: start; }
+  @media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
+
+  .tabla-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th {
+    text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--ink-3);
+    padding: 6px 10px; border-bottom: 1px solid var(--line);
+  }
+  td { padding: 9px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  td.dur { font-variant-numeric: tabular-nums; }
+  .estado {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12.5px; font-weight: 600; color: var(--ink-2);
+  }
+  .flecha { color: var(--ink-3); padding: 0 2px; }
+
+  .cola { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--card-2); }
+  .cola + .cola { margin-top: 12px; }
+  .cola .head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .cola .nombre { font-weight: 700; font-size: 15px; }
+  .cola .num { color: var(--ink-3); font-size: 12.5px; }
+  .cola .stats { display: flex; gap: 18px; margin-top: 10px; flex-wrap: wrap; }
+  .cola .st .v { font-size: 21px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .cola .st .k { font-size: 11.5px; color: var(--ink-2); }
+  .cola .espera-warn .v { color: var(--busy); }
+
+  .exts { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 10px; }
+  .ext {
+    display: flex; align-items: center; gap: 10px;
+    border: 1px solid var(--line); border-radius: 9px;
+    padding: 9px 11px; background: var(--card);
+  }
+  .ext .num {
+    font-size: 14px; font-weight: 700; color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border-radius: 6px; padding: 3px 7px;
+  }
+  .ext .quien { min-width: 0; }
+  .ext .nombre { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ext .st { font-size: 11.5px; color: var(--ink-2); display: flex; align-items: center; gap: 5px; }
+
+  .leyenda { display: flex; gap: 16px; margin: 2px 0 10px; font-size: 12.5px; color: var(--ink-2); }
+  .leyenda .chip { display: inline-flex; align-items: center; gap: 6px; }
+  .leyenda .sw { width: 10px; height: 10px; border-radius: 3px; }
+  .chart-wrap { position: relative; overflow-x: auto; }
+  #chart { display: block; width: 100%; height: 240px; }
+  #tooltip {
+    position: absolute; pointer-events: none; display: none;
+    background: var(--ink); color: var(--page);
+    border-radius: 7px; padding: 7px 10px; font-size: 12.5px; line-height: 1.5;
+    box-shadow: var(--shadow); z-index: 6; white-space: nowrap;
+  }
+  #tooltip b { font-variant-numeric: tabular-nums; }
+
+  footer { text-align: center; color: var(--ink-3); font-size: 12.5px; padding-bottom: 24px; }
+</style>
+
+<header class="topbar">
+  <div class="brand"><strong>Karma</strong><span>Centralita · Panel de operador</span></div>
+  <span class="pill"><span class="dot ok live"></span>Troncal NetVoz&nbsp;SIP · Registrada</span>
+  <span class="pill"><span class="dot ok"></span>Asterisk 20 · uptime 14&nbsp;d</span>
+  <div class="spacer"></div>
+  <span id="reloj" class="mono">--:--:--</span>
+</header>
+
+<main>
+  <section class="kpis" aria-label="Resumen del día">
+    <div class="kpi"><div class="lbl">Llamadas hoy</div><div class="val" id="k-total">184</div><div class="sub"><span class="up">▲ 12%</span> vs. ayer</div></div>
+    <div class="kpi"><div class="lbl">Atendidas</div><div class="val" id="k-atend">166</div><div class="sub">90% del total</div></div>
+    <div class="kpi"><div class="lbl">Perdidas</div><div class="val" id="k-perd">18</div><div class="sub"><span class="down">▼ 3</span> vs. ayer</div></div>
+    <div class="kpi"><div class="lbl">Espera media</div><div class="val"><span id="k-espera">0:38</span></div><div class="sub">objetivo &lt; 1:00</div></div>
+    <div class="kpi"><div class="lbl">Nivel de servicio</div><div class="val" id="k-sla">92%</div><div class="sub">atendidas en &lt; 30 s</div></div>
+  </section>
+
+  <div class="cols">
+    <section class="card" aria-label="Llamadas activas">
+      <h2>Llamadas activas <span class="count" id="n-activas">4</span></h2>
+      <div class="tabla-wrap">
+        <table>
+          <thead><tr><th>Origen</th><th></th><th>Destino</th><th>Vía</th><th>Estado</th><th>Duración</th></tr></thead>
+          <tbody id="tbody-activas"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card" aria-label="Colas">
+      <h2>Colas</h2>
+      <div id="colas"></div>
+    </section>
+  </div>
+
+  <section class="card" aria-label="Extensiones">
+    <h2>Extensiones <span class="count" id="n-exts"></span></h2>
+    <div class="exts" id="exts"></div>
+  </section>
+
+  <section class="card" aria-label="Actividad de hoy">
+    <h2>Actividad de hoy · llamadas por hora</h2>
+    <div class="leyenda">
+      <span class="chip"><span class="sw" style="background:var(--serie-1)"></span>Atendidas</span>
+      <span class="chip"><span class="sw" style="background:var(--serie-2)"></span>Perdidas</span>
+    </div>
+    <div class="chart-wrap">
+      <svg id="chart" role="img" aria-label="Barras apiladas de llamadas atendidas y perdidas por hora, de 8:00 a 20:00"></svg>
+      <div id="tooltip"></div>
+    </div>
+  </section>
+
+  <footer>Datos simulados — v0.1 · La integración con Asterisk (AMI/ARI) llegará en la siguiente iteración.</footer>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- datos simulados ---------- */
+
+  var EXTS = [
+    { num: "100", nombre: "Recepción",      estado: "llamada" },
+    { num: "101", nombre: "María G.",       estado: "disponible" },
+    { num: "102", nombre: "Jorge P.",       estado: "llamada" },
+    { num: "103", nombre: "Lucía R.",       estado: "disponible" },
+    { num: "104", nombre: "Andrés T.",      estado: "timbrando" },
+    { num: "105", nombre: "Sala reuniones", estado: "disponible" },
+    { num: "106", nombre: "Carmen V.",      estado: "dnd" },
+    { num: "107", nombre: "Soporte N1",     estado: "llamada" },
+    { num: "108", nombre: "Soporte N2",     estado: "disponible" },
+    { num: "109", nombre: "Ventas 1",       estado: "llamada" },
+    { num: "110", nombre: "Ventas 2",       estado: "disponible" },
+    { num: "111", nombre: "Almacén",        estado: "off" }
+  ];
+
+  var ESTADOS = {
+    disponible: { cls: "ok",   txt: "Disponible" },
+    llamada:    { cls: "busy", txt: "En llamada" },
+    timbrando:  { cls: "warn", txt: "Timbrando" },
+    dnd:        { cls: "dnd",  txt: "No molestar" },
+    off:        { cls: "off",  txt: "Sin registrar" }
+  };
+
+  var ACTIVAS = [
+    { origen: "612 448 190", destino: "102 · Jorge P.",   via: "Cola Soporte",  estado: "llamada",   seg: 154 },
+    { origen: "934 002 118", destino: "109 · Ventas 1",   via: "Cola Ventas",   estado: "llamada",   seg: 412 },
+    { origen: "100 · Recepción", destino: "689 233 704",  via: "Troncal NetVoz", estado: "llamada",  seg: 67 },
+    { origen: "655 781 342", destino: "104 · Andrés T.",  via: "Cola Soporte",  estado: "timbrando", seg: 9 }
+  ];
+
+  var COLAS = [
+    { nombre: "Soporte", num: "600", agentes: 3, espera: 2, esperaMax: 47, abandono: "4%" },
+    { nombre: "Ventas",  num: "601", agentes: 2, espera: 0, esperaMax: 12, abandono: "2%" }
+  ];
+
+  var HORAS = [
+    { h: "08", a: 6,  p: 1 }, { h: "09", a: 14, p: 2 }, { h: "10", a: 21, p: 3 },
+    { h: "11", a: 24, p: 2 }, { h: "12", a: 19, p: 4 }, { h: "13", a: 11, p: 1 },
+    { h: "14", a: 8,  p: 0 }, { h: "15", a: 13, p: 1 }, { h: "16", a: 18, p: 2 },
+    { h: "17", a: 16, p: 1 }, { h: "18", a: 10, p: 1 }, { h: "19", a: 6,  p: 0 }
+  ];
+
+  /* ---------- utilidades ---------- */
+
+  function $(id) { return document.getElementById(id); }
+  function fmtDur(s) {
+    var m = Math.floor(s / 60), r = s % 60;
+    return m + ":" + (r < 10 ? "0" : "") + r;
+  }
+
+  /* ---------- render ---------- */
+
+  function renderExts() {
+    $("exts").innerHTML = EXTS.map(function (e) {
+      var st = ESTADOS[e.estado];
+      return '<div class="ext">' +
+        '<span class="num mono">' + e.num + '</span>' +
+        '<span class="quien"><span class="nombre">' + e.nombre + '</span>' +
+        '<span class="st"><span class="dot ' + st.cls + '"></span>' + st.txt + '</span></span></div>';
+    }).join("");
+    var reg = EXTS.filter(function (e) { return e.estado !== "off"; }).length;
+    $("n-exts").textContent = reg + " / " + EXTS.length + " registradas";
+  }
+
+  function renderActivas() {
+    $("tbody-activas").innerHTML = ACTIVAS.map(function (c) {
+      var st = ESTADOS[c.estado];
+      return "<tr>" +
+        '<td class="mono">' + c.origen + "</td>" +
+        '<td class="flecha">→</td>' +
+        '<td class="mono">' + c.destino + "</td>" +
+        "<td>" + c.via + "</td>" +
+        '<td><span class="estado"><span class="dot ' + st.cls + '"></span>' + st.txt + "</span></td>" +
+        '<td class="dur mono">' + fmtDur(c.seg) + "</td></tr>";
+    }).join("");
+    $("n-activas").textContent = ACTIVAS.length;
+  }
+
+  function renderColas() {
+    $("colas").innerHTML = COLAS.map(function (q) {
+      var warn = q.espera > 1 ? " espera-warn" : "";
+      return '<div class="cola"><div class="head">' +
+        '<span class="nombre">' + q.nombre + '</span><span class="num mono">cola ' + q.num + "</span></div>" +
+        '<div class="stats">' +
+        '<span class="st"><span class="v">' + q.agentes + '</span> <span class="k">agentes</span></span>' +
+        '<span class="st' + warn + '"><span class="v">' + q.espera + '</span> <span class="k">en espera</span></span>' +
+        '<span class="st"><span class="v">' + q.esperaMax + ' s</span> <span class="k">espera máx.</span></span>' +
+        '<span class="st"><span class="v">' + q.abandono + '</span> <span class="k">abandono</span></span>' +
+        "</div></div>";
+    }).join("");
+  }
+
+  /* ---------- gráfico de barras apiladas ---------- */
+
+  var NS = "http://www.w3.org/2000/svg";
+  function el(name, attrs) {
+    var n = document.createElementNS(NS, name);
+    for (var k in attrs) n.setAttribute(k, attrs[k]);
+    return n;
+  }
+
+  function renderChart() {
+    var svg = $("chart");
+    svg.innerHTML = "";
+    var W = Math.max(svg.clientWidth, 560), H = 240;
+    var m = { t: 12, r: 8, b: 26, l: 34 };
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+
+    var max = 30;
+    var iw = W - m.l - m.r, ih = H - m.t - m.b;
+    var slot = iw / HORAS.length;
+    var bw = Math.min(26, slot * 0.5);
+    var y = function (v) { return m.t + ih - (v / max) * ih; };
+
+    [0, 10, 20, 30].forEach(function (v) {
+      svg.appendChild(el("line", { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v),
+        stroke: v === 0 ? "var(--line)" : "var(--grid)", "stroke-width": 1 }));
+      var t = el("text", { x: m.l - 8, y: y(v) + 4, "text-anchor": "end",
+        "font-size": 11, fill: "var(--ink-3)" });
+      t.textContent = v;
+      svg.appendChild(t);
+    });
+
+    HORAS.forEach(function (d, i) {
+      var cx = m.l + slot * i + slot / 2;
+      var x = cx - bw / 2;
+      var hA = (d.a / max) * ih, hP = (d.p / max) * ih;
+      var g = el("g", { "data-i": i, cursor: "pointer" });
+
+      g.appendChild(el("rect", { x: x, y: y(d.a), width: bw, height: Math.max(hA, 1),
+        fill: "var(--serie-1)", rx: d.p === 0 ? 4 : 0 }));
+      if (d.p > 0) {
+        g.appendChild(el("rect", { x: x, y: y(d.a + d.p) - 2, width: bw, height: Math.max(hP, 2),
+          fill: "var(--serie-2)", rx: 4 }));
+      }
+      g.appendChild(el("rect", { x: cx - slot / 2, y: m.t, width: slot, height: ih,
+        fill: "transparent" }));
+
+      var t = el("text", { x: cx, y: H - 8, "text-anchor": "middle",
+        "font-size": 11, fill: "var(--ink-3)" });
+      t.textContent = d.h + "h";
+      svg.appendChild(t);
+      svg.appendChild(g);
+    });
+
+    var tip = $("tooltip"), wrap = svg.parentNode;
+    svg.addEventListener("mousemove", function (ev) {
+      var g = ev.target.closest("g[data-i]");
+      if (!g) { tip.style.display = "none"; return; }
+      var d = HORAS[+g.getAttribute("data-i")];
+      tip.innerHTML = d.h + ":00 — " + (+d.h + 1) + ":00<br>" +
+        "Atendidas: <b>" + d.a + "</b> · Perdidas: <b>" + d.p + "</b>";
+      tip.style.display = "block";
+      var r = wrap.getBoundingClientRect();
+      var tx = ev.clientX - r.left + 14, ty = ev.clientY - r.top - 10;
+      if (tx + tip.offsetWidth > r.width) tx -= tip.offsetWidth + 28;
+      tip.style.left = tx + "px";
+      tip.style.top = ty + "px";
+    });
+    svg.addEventListener("mouseleave", function () { tip.style.display = "none"; });
+  }
+
+  /* ---------- simulación en vivo ---------- */
+
+  function tick() {
+    var d = new Date();
+    $("reloj").textContent = [d.getHours(), d.getMinutes(), d.getSeconds()]
+      .map(function (n) { return (n < 10 ? "0" : "") + n; }).join(":");
+
+    ACTIVAS.forEach(function (c) { c.seg++; });
+    renderActivas();
+  }
+
+  var pasoSim = 0;
+  function simular() {
+    pasoSim++;
+    // el timbrando pasa a llamada; a veces entra o cuelga alguien
+    ACTIVAS.forEach(function (c) {
+      if (c.estado === "timbrando" && c.seg > 12) c.estado = "llamada";
+    });
+    if (pasoSim % 3 === 0 && ACTIVAS.length > 2) {
+      var fin = ACTIVAS.shift();
+      EXTS.forEach(function (e) {
+        if (fin.destino.indexOf(e.num) === 0 && e.estado === "llamada") e.estado = "disponible";
+      });
+      $("k-atend").textContent = +$("k-atend").textContent + 1;
+      $("k-total").textContent = +$("k-total").textContent + 1;
+    }
+    if (pasoSim % 4 === 1) {
+      var libres = EXTS.filter(function (e) { return e.estado === "disponible"; });
+      if (libres.length) {
+        var e = libres[Math.floor(Math.random() * libres.length)];
+        e.estado = "timbrando";
+        ACTIVAS.push({
+          origen: "6" + String(Math.floor(Math.random() * 90000000) + 10000000),
+          destino: e.num + " · " + e.nombre,
+          via: Math.random() < 0.5 ? "Cola Soporte" : "Cola Ventas",
+          estado: "timbrando", seg: 0
+        });
+        setTimeout(function () {
+          if (e.estado === "timbrando") e.estado = "llamada";
+          renderExts();
+        }, 6000);
+      }
+    }
+    COLAS[0].espera = Math.max(0, COLAS[0].espera + (Math.random() < 0.5 ? -1 : 1));
+    COLAS[1].espera = Math.random() < 0.8 ? 0 : 1;
+    renderExts();
+    renderColas();
+    renderActivas();
+  }
+
+  renderExts();
+  renderActivas();
+  renderColas();
+  renderChart();
+  tick();
+  setInterval(tick, 1000);
+  setInterval(simular, 7000);
+  window.addEventListener("resize", renderChart);
+})();
+</script>
+</body>
+</html>
