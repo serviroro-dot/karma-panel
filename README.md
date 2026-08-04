@@ -1,4 +1,4 @@
-# Karma · Panel de centralita
+# Flower Royal · Panel de centralita
 
 Panel de operador para la nueva centralita (Asterisk). Primera versión (v0.1)
 con **datos simulados**: sirve para validar el diseño y la información que
