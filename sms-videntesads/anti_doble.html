@@ -30,21 +30,52 @@
 (function () {
   'use strict';
 
-  var VENTANA = 6000;          // dos peticiones iguales en menos de esto = duplicado
-  var recientes = new Map();
+  // Si el archivo acabara pegado dos veces, el segundo envoltorio
+  // envolvería al primero y podría anularlo. Con esto solo entra uno.
+  if (window.__antiDobleActivo) { return; }
+  window.__antiDobleActivo = true;
+
+  /*
+   * VENTANA: cuánto tiempo consideramos que dos peticiones idénticas son
+   * la misma pulsación duplicada.
+   *
+   * Se queda corta a propósito. Las tres causas del doble envío ocurren
+   * en milisegundos: el manejador enganchado dos veces dispara las dos
+   * peticiones en el mismo instante, y un doble toque humano no llega al
+   * medio segundo. Con 2,5 segundos se cubren todas.
+   *
+   * No se pone más alto porque muchos paneles piden estado al servidor
+   * cada pocos segundos con una petición siempre igual; con una ventana
+   * larga las tomaríamos por duplicados y romperíamos la pantalla.
+   */
+  var VENTANA = 2500;
+  var recientes = {};          // objeto simple: funciona en cualquier navegador
 
   function limpiar(ahora) {
-    recientes.forEach(function (t, k) {
-      if (ahora - t > VENTANA) { recientes.delete(k); }
-    });
+    for (var k in recientes) {
+      if (Object.prototype.hasOwnProperty.call(recientes, k) && ahora - recientes[k] > VENTANA) {
+        delete recientes[k];
+      }
+    }
   }
 
-  /** ¿Ya ha salido esta misma petición hace un momento? */
-  function esRepetida(clave) {
-    var ahora = Date.now();
-    limpiar(ahora);
-    if (recientes.has(clave)) { return true; }
-    recientes.set(clave, ahora);
+  /**
+   * ¿Ya ha salido esta misma petición hace un momento?
+   *
+   * Solo se vigilan las peticiones que llevan datos dentro. Una petición
+   * con el cuerpo vacío no es un envío de SMS: suele ser el panel
+   * preguntando al servidor cómo va, y ésas tienen que pasar siempre.
+   */
+  function esRepetida(metodo, url, cuerpo) {
+    if (!cuerpo) { return false; }
+
+    var clave = 'k|' + metodo + '|' + url + '|' + cuerpo;   // el prefijo evita
+    var ahora = Date.now();                                 // chocar con claves
+    limpiar(ahora);                                         // internas del objeto
+
+    if (Object.prototype.hasOwnProperty.call(recientes, clave)) { return true; }
+
+    recientes[clave] = ahora;
     return false;
   }
 
@@ -75,9 +106,7 @@
         var metodo = ((opciones && opciones.method) || 'GET').toUpperCase();
 
         if (metodo !== 'GET' && metodo !== 'HEAD') {
-          var clave = metodo + ' ' + url + ' ' + aTexto(opciones && opciones.body);
-
-          if (esRepetida(clave)) {
+          if (esRepetida(metodo, url, aTexto(opciones && opciones.body))) {
             console.warn('[anti-doble] Envío repetido bloqueado:', url);
             // Devolvemos una respuesta correcta de mentira, para que la
             // página no se quede colgada ni enseñe un error a la operadora.
@@ -106,25 +135,42 @@
 
     XMLHttpRequest.prototype.send = function (cuerpo) {
       try {
-        if (this.__ad_metodo && this.__ad_metodo !== 'GET' && this.__ad_metodo !== 'HEAD') {
-          var clave = this.__ad_metodo + ' ' + this.__ad_url + ' ' + aTexto(cuerpo);
+        if (this.__ad_metodo && this.__ad_metodo !== 'GET' && this.__ad_metodo !== 'HEAD'
+            && esRepetida(this.__ad_metodo, this.__ad_url, aTexto(cuerpo))) {
 
-          if (esRepetida(clave)) {
-            console.warn('[anti-doble] Envío repetido bloqueado:', this.__ad_url);
-            var xhr = this;
-            setTimeout(function () {
-              try {
-                Object.defineProperty(xhr, 'readyState',   { value: 4, configurable: true });
-                Object.defineProperty(xhr, 'status',       { value: 200, configurable: true });
-                Object.defineProperty(xhr, 'responseText', { value: '{"ok":true,"duplicado":true}', configurable: true });
-                if (typeof xhr.onreadystatechange === 'function') { xhr.onreadystatechange(); }
-                if (typeof xhr.onload === 'function') { xhr.onload(); }
-              } catch (e) { /* nada */ }
-            }, 10);
-            return;
-          }
+          console.warn('[anti-doble] Envío repetido bloqueado:', this.__ad_url);
+
+          var xhr   = this;
+          var falsa = '{"ok":true,"duplicado":true}';
+
+          setTimeout(function () {
+            try {
+              // Le hacemos creer que respondió bien. Es cierto en el fondo:
+              // el mensaje SÍ salió, en la primera de las dos peticiones.
+              Object.defineProperty(xhr, 'readyState',    { value: 4,     configurable: true });
+              Object.defineProperty(xhr, 'status',        { value: 200,   configurable: true });
+              Object.defineProperty(xhr, 'statusText',    { value: 'OK',  configurable: true });
+              Object.defineProperty(xhr, 'responseText',  { value: falsa, configurable: true });
+              Object.defineProperty(xhr, 'response',      { value: falsa, configurable: true });
+
+              // dispatchEvent avisa TANTO a xhr.onload como a los
+              // addEventListener('load'). Con llamar solo a onload se
+              // quedarían colgadas las páginas que usan lo segundo.
+              if (typeof xhr.onreadystatechange === 'function') { xhr.onreadystatechange(); }
+              xhr.dispatchEvent(new Event('readystatechange'));
+              xhr.dispatchEvent(new Event('load'));
+              xhr.dispatchEvent(new Event('loadend'));
+            } catch (e) {
+              // Si el navegador no deja falsear la respuesta, avisamos por
+              // consola. La petición duplicada no sale igualmente, que es
+              // lo importante.
+              console.warn('[anti-doble] No se pudo simular la respuesta:', e.message);
+            }
+          }, 10);
+
+          return;
         }
-      } catch (e) { /* se deja pasar */ }
+      } catch (e) { /* ante la duda, se deja pasar la petición */ }
 
       return enviarOriginal.apply(this, arguments);
     };
