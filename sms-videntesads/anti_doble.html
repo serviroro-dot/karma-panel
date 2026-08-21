@@ -1,0 +1,153 @@
+<!--
+  ══════════════════════════════════════════════════════════════════
+  BLINDAJE ANTI SMS DOBLE
+  ══════════════════════════════════════════════════════════════════
+
+  QUÉ HACE
+  Vigila las peticiones que sale de la página. Si la misma petición sale
+  dos veces seguidas (el mismo mensaje al mismo número en menos de 6
+  segundos), deja pasar la primera y tira la segunda a la basura.
+
+  Da igual por qué se duplicaba: el botón con el aviso puesto dos veces,
+  el archivo .js incluido dos veces, o un doble toque sin querer. Las
+  tres se cortan aquí.
+
+  DÓNDE SE PONE
+  Al final del archivo chat.php, JUSTO ANTES de la línea que pone
+  </body>. Se pega tal cual, con las etiquetas <script> incluidas.
+
+  ANTES DE TOCAR NADA: haz una copia del archivo. Si algo va mal,
+  la recuperas y ya está.
+
+  SI NO FUNCIONA
+  Entonces la duplicación no está en el navegador sino en el PHP (llama
+  dos veces a Twilio). Quita esto y dímelo, que eso se arregla en otro
+  sitio.
+  ══════════════════════════════════════════════════════════════════
+-->
+
+<script>
+(function () {
+  'use strict';
+
+  var VENTANA = 6000;          // dos peticiones iguales en menos de esto = duplicado
+  var recientes = new Map();
+
+  function limpiar(ahora) {
+    recientes.forEach(function (t, k) {
+      if (ahora - t > VENTANA) { recientes.delete(k); }
+    });
+  }
+
+  /** ¿Ya ha salido esta misma petición hace un momento? */
+  function esRepetida(clave) {
+    var ahora = Date.now();
+    limpiar(ahora);
+    if (recientes.has(clave)) { return true; }
+    recientes.set(clave, ahora);
+    return false;
+  }
+
+  /** Convierte el cuerpo de la petición en texto, para poder compararlo. */
+  function aTexto(cuerpo) {
+    try {
+      if (!cuerpo) { return ''; }
+      if (typeof cuerpo === 'string') { return cuerpo; }
+      if (cuerpo instanceof URLSearchParams) { return cuerpo.toString(); }
+      if (typeof FormData !== 'undefined' && cuerpo instanceof FormData) {
+        var p = [];
+        cuerpo.forEach(function (v, k) {
+          p.push(k + '=' + (typeof v === 'string' ? v : '[archivo]'));
+        });
+        return p.sort().join('&');
+      }
+      return String(cuerpo);
+    } catch (e) { return ''; }
+  }
+
+  /* ---------- 1. fetch ---------- */
+  if (window.fetch) {
+    var fetchOriginal = window.fetch;
+
+    window.fetch = function (recurso, opciones) {
+      try {
+        var url    = (typeof recurso === 'string') ? recurso : (recurso && recurso.url) || '';
+        var metodo = ((opciones && opciones.method) || 'GET').toUpperCase();
+
+        if (metodo !== 'GET' && metodo !== 'HEAD') {
+          var clave = metodo + ' ' + url + ' ' + aTexto(opciones && opciones.body);
+
+          if (esRepetida(clave)) {
+            console.warn('[anti-doble] Envío repetido bloqueado:', url);
+            // Devolvemos una respuesta correcta de mentira, para que la
+            // página no se quede colgada ni enseñe un error a la operadora.
+            return Promise.resolve(new Response('{"ok":true,"duplicado":true}', {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' }
+            }));
+          }
+        }
+      } catch (e) { /* si algo falla aquí, se deja pasar la petición */ }
+
+      return fetchOriginal.apply(this, arguments);
+    };
+  }
+
+  /* ---------- 2. XMLHttpRequest ---------- */
+  if (window.XMLHttpRequest) {
+    var abrirOriginal   = XMLHttpRequest.prototype.open;
+    var enviarOriginal  = XMLHttpRequest.prototype.send;
+
+    XMLHttpRequest.prototype.open = function (metodo, url) {
+      this.__ad_metodo = String(metodo || 'GET').toUpperCase();
+      this.__ad_url    = String(url || '');
+      return abrirOriginal.apply(this, arguments);
+    };
+
+    XMLHttpRequest.prototype.send = function (cuerpo) {
+      try {
+        if (this.__ad_metodo && this.__ad_metodo !== 'GET' && this.__ad_metodo !== 'HEAD') {
+          var clave = this.__ad_metodo + ' ' + this.__ad_url + ' ' + aTexto(cuerpo);
+
+          if (esRepetida(clave)) {
+            console.warn('[anti-doble] Envío repetido bloqueado:', this.__ad_url);
+            var xhr = this;
+            setTimeout(function () {
+              try {
+                Object.defineProperty(xhr, 'readyState',   { value: 4, configurable: true });
+                Object.defineProperty(xhr, 'status',       { value: 200, configurable: true });
+                Object.defineProperty(xhr, 'responseText', { value: '{"ok":true,"duplicado":true}', configurable: true });
+                if (typeof xhr.onreadystatechange === 'function') { xhr.onreadystatechange(); }
+                if (typeof xhr.onload === 'function') { xhr.onload(); }
+              } catch (e) { /* nada */ }
+            }, 10);
+            return;
+          }
+        }
+      } catch (e) { /* se deja pasar */ }
+
+      return enviarOriginal.apply(this, arguments);
+    };
+  }
+
+  /* ---------- 3. Formularios normales (sin JavaScript) ----------
+     Un único vigilante: si el mismo formulario se manda dos veces
+     seguidas, la segunda se corta. La primera pasa intacta. */
+  document.addEventListener('submit', function (e) {
+    var f = e.target;
+    if (!f) { return; }
+
+    if (f.__ad_enviado) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      console.warn('[anti-doble] Segundo envío del formulario bloqueado.');
+      return;
+    }
+
+    f.__ad_enviado = true;
+    setTimeout(function () { f.__ad_enviado = false; }, VENTANA);
+  }, true);
+
+  console.log('[anti-doble] Blindaje activo.');
+})();
+</script>
