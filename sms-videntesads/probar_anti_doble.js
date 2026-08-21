@@ -123,7 +123,36 @@ document.getElementById('b').addEventListener('click', function () {
 });
 </script>`;
 
+// LEGÍTIMO 4 — dos mensajes DISTINTOS seguidos por el mismo formulario
+// nativo. Éste es el caso que se tragaba el bloque 3 que hemos quitado.
+// Deben salir LOS DOS.
+const legitimoFormDistinto = `
+<form id="f" action="/enviar" method="post" onsubmit="return mandar(event)">
+  <input name="texto" id="t" value="ya te llamo">
+  <button id="b" type="submit">Enviar</button>
+</form>
+<script>
+function mandar(e) {
+  e.preventDefault();
+  fetch('/enviar', { method: 'POST', body: 'texto=' + document.getElementById('t').value });
+  return false;
+}
+</script>`;
+
+// LEGÍTIMO 5 — sondeo cada 2 segundos CON cuerpo siempre idéntico.
+// Es el caso que denunció la revisión. No se debe bloquear ninguno.
+const legitimoSondeoConCuerpo = `
+<script>
+var n = 0;
+var t = setInterval(function () {
+  fetch('/estado', { method: 'POST', body: 'action=check_new&chat=123' });
+  if (++n === 3) clearInterval(t);
+}, 2000);
+</script>`;
+
 const paginas = {
+  '/formdist': marco(legitimoFormDistinto, true),
+  '/sondeo2':  marco(legitimoSondeoConCuerpo, true),
   '/a':        marco(casoA, true),
   '/a-sin':    marco(casoA, false),
   '/b':        marco(casoB, true),
@@ -182,8 +211,22 @@ function comprobar(nombre, obtenido, esperado) {
   comprobar('dos SMS a números distintos', await correr('/dist', unClic), 2);
   comprobar('sondeos de estado, cuerpo vacío', await correr('/sondeo', async p => { await dormir(1800); }), 4);
   comprobar('reenvío a propósito pasada la ventana', await correr('/reenvio', async p => {
-    await p.click('#b'); await dormir(2800); await p.click('#b'); await dormir(400);
+    await p.click('#b'); await dormir(1600); await p.click('#b'); await dormir(400);
   }), 2);
+
+  // Los dos casos que denunció la revisión y que antes fallaban.
+  comprobar('dos mensajes DISTINTOS por el mismo formulario', await correr('/formdist', async p => {
+    await p.click('#b');
+    await dormir(200);
+    await p.fill('#t', 'en 5 minutos');
+    await p.click('#b');
+    await dormir(400);
+  }), 2);
+
+  // Los sondeos salen a los 2, 4 y 6 segundos: hay que esperar más de 6.
+  comprobar('sondeo cada 2 s con cuerpo siempre igual', await correr('/sondeo2', async p => {
+    await dormir(6800);
+  }), 3);
 
   console.log('\n  LA PÁGINA NO SE QUEDA COLGADA\n');
   recibidos = [];

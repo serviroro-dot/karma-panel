@@ -4,9 +4,14 @@
   ══════════════════════════════════════════════════════════════════
 
   QUÉ HACE
-  Vigila las peticiones que sale de la página. Si la misma petición sale
-  dos veces seguidas (el mismo mensaje al mismo número en menos de 6
-  segundos), deja pasar la primera y tira la segunda a la basura.
+  Vigila lo que sale de la página. Si la MISMA petición, con el mismo
+  contenido, sale dos veces en menos de 1,2 segundos, deja pasar la
+  primera y tira la segunda.
+
+  Eso es un duplicado, no dos envíos: cuando el fallo está en el botón
+  las dos peticiones salen en el mismo instante, y un doble toque humano
+  no llega ni al medio segundo. Dos mensajes que escribes tú de verdad,
+  aunque los mandes seguidos, tardan mucho más y pasan sin tocarse.
 
   Da igual por qué se duplicaba: el botón con el aviso puesto dos veces,
   el archivo .js incluido dos veces, o un doble toque sin querer. Las
@@ -18,6 +23,12 @@
 
   ANTES DE TOCAR NADA: haz una copia del archivo. Si algo va mal,
   la recuperas y ya está.
+
+  RECOMENDADO (no obligatorio)
+  Justo debajo hay una línea, SOLO_ESTAS_URLS. Si sabes a qué dirección
+  llama tu panel al pulsar Enviar, ponla ahí y el blindaje se aplicará
+  solo a esa. Así no toca ninguna otra petición de la página. Se ve en
+  el navegador: F12 → pestaña Red → pulsas Enviar → miras qué se llama.
 
   SI NO FUNCIONA
   Entonces la duplicación no está en el navegador sino en el PHP (llama
@@ -36,19 +47,32 @@
   window.__antiDobleActivo = true;
 
   /*
+   * SOLO_ESTAS_URLS — el filtro recomendado.
+   *
+   * Si lo dejas en null, el blindaje vigila TODAS las peticiones de la
+   * página. Funciona, pero es más bruto de lo necesario. Si pones aquí
+   * un trozo de la dirección a la que llama tu panel al enviar, solo
+   * tocará ésa y no podrá estorbar a nada más.
+   *
+   * Ejemplos:  /enviar/    ·    /sms\.php/    ·    /ajax\.php\?op=enviar/
+   */
+  var SOLO_ESTAS_URLS = null;
+
+  /*
    * VENTANA: cuánto tiempo consideramos que dos peticiones idénticas son
    * la misma pulsación duplicada.
    *
-   * Se queda corta a propósito. Las tres causas del doble envío ocurren
-   * en milisegundos: el manejador enganchado dos veces dispara las dos
-   * peticiones en el mismo instante, y un doble toque humano no llega al
-   * medio segundo. Con 2,5 segundos se cubren todas.
+   * Corta a propósito. Las tres causas del doble envío ocurren en
+   * milisegundos: cuando el manejador está enganchado dos veces, las dos
+   * peticiones salen en el mismo instante; un doble toque humano no llega
+   * al medio segundo. Con 1,2 segundos se cubren las tres de sobra.
    *
-   * No se pone más alto porque muchos paneles piden estado al servidor
-   * cada pocos segundos con una petición siempre igual; con una ventana
-   * larga las tomaríamos por duplicados y romperíamos la pantalla.
+   * No se pone más alto porque muchos paneles preguntan al servidor cada
+   * pocos segundos con una petición siempre igual. Con una ventana larga
+   * las tomaríamos por duplicados y le romperíamos la pantalla sin que
+   * ella supiera por qué.
    */
-  var VENTANA = 2500;
+  var VENTANA = 1200;
   var recientes = {};          // objeto simple: funciona en cualquier navegador
 
   function limpiar(ahora) {
@@ -68,6 +92,10 @@
    */
   function esRepetida(metodo, url, cuerpo) {
     if (!cuerpo) { return false; }
+
+    // Si se ha configurado el filtro, todo lo que no sea el envío pasa
+    // sin que lo miremos siquiera.
+    if (SOLO_ESTAS_URLS && !SOLO_ESTAS_URLS.test(String(url))) { return false; }
 
     var clave = 'k|' + metodo + '|' + url + '|' + cuerpo;   // el prefijo evita
     var ahora = Date.now();                                 // chocar con claves
@@ -176,23 +204,21 @@
     };
   }
 
-  /* ---------- 3. Formularios normales (sin JavaScript) ----------
-     Un único vigilante: si el mismo formulario se manda dos veces
-     seguidas, la segunda se corta. La primera pasa intacta. */
-  document.addEventListener('submit', function (e) {
-    var f = e.target;
-    if (!f) { return; }
-
-    if (f.__ad_enviado) {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      console.warn('[anti-doble] Segundo envío del formulario bloqueado.');
-      return;
-    }
-
-    f.__ad_enviado = true;
-    setTimeout(function () { f.__ad_enviado = false; }, VENTANA);
-  }, true);
+  /* ---------- 3. Formularios normales ----------
+   *
+   * AQUÍ HABÍA UN TERCER BLOQUE Y SE HA QUITADO A PROPÓSITO.
+   *
+   * Vigilaba los formularios, pero se fijaba en QUÉ formulario era, no en
+   * lo que llevaba dentro. Con eso, si mandabas dos mensajes DISTINTOS
+   * seguidos por el mismo formulario, se tragaba el segundo en silencio:
+   * ni salía el SMS, ni aparecía aviso ninguno. Justo lo peor que puede
+   * hacer un blindaje como éste.
+   *
+   * Y era innecesario: un formulario normal, de los que recargan la
+   * página, no puede enviarse dos veces porque la página se va al mandar
+   * el primero. Y si el panel envía por JavaScript, ya lo cubren los
+   * bloques 1 y 2, que sí comparan el contenido.
+   */
 
   console.log('[anti-doble] Blindaje activo.');
 })();
