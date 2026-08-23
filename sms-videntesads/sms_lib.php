@@ -76,6 +76,121 @@ function sms_normalizar_telefono($tel)
     return $d;
 }
 
+/* ------------------------------------------------------------------ *
+ *  El texto del mensaje: que quepa SIEMPRE en un solo SMS
+ * ------------------------------------------------------------------ */
+
+/**
+ * El alfabeto que usan los SMS (GSM 03.38). Fíjate en que están é, è, à,
+ * ò, ù, ñ, ü, ç... pero NO están á, í, ó, ú. Ésa es la trampa que dobla
+ * la factura sin que se note.
+ */
+function sms_alfabeto_gsm()
+{
+    // OJO: en comillas simples a propósito. Con comillas dobles, PHP toma
+    // el símbolo del dólar como principio de una variable y se come parte
+    // del alfabeto — con lo que la é de "Café" se perdería.
+    return '@£$¥èéùìòÇ' . "\n" . 'Øø' . "\r"
+         . 'ÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !"#¤%&\'()*+,-./0123456789:;<=>?'
+         . '¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà';
+}
+
+/** Estos caben, pero ocupan dos huecos en vez de uno. */
+function sms_alfabeto_gsm_extendido()
+{
+    return '^{}\\[~]|€';
+}
+
+/**
+ * Cambia lo que no cabe en el alfabeto de los SMS por su equivalente que
+ * sí cabe: las tildes de "más" o "número", las comillas curvas que pone
+ * Word, las rayas largas, los puntos suspensivos de un solo carácter.
+ * Lo que no tiene equivalente (emojis) se quita.
+ *
+ * Así el mensaje se queda en 160 caracteres de verdad y se cobra UNO por
+ * persona, que es lo que se quiere.
+ */
+function sms_a_gsm($texto)
+{
+    $cambios = [
+        'á'=>'a', 'í'=>'i', 'ó'=>'o', 'ú'=>'u',
+        'Á'=>'A', 'Í'=>'I', 'Ó'=>'O', 'Ú'=>'U',
+        'Â'=>'A', 'Ê'=>'E', 'Î'=>'I', 'Ô'=>'O', 'Û'=>'U',
+        'â'=>'a', 'ê'=>'e', 'î'=>'i', 'ô'=>'o', 'û'=>'u',
+        'ã'=>'a', 'õ'=>'o', 'ẽ'=>'e', 'ĩ'=>'i', 'ũ'=>'u',
+        'À'=>'A', 'È'=>'E', 'Ì'=>'I', 'Ò'=>'O', 'Ù'=>'U',
+        'ï'=>'i', 'Ï'=>'I', 'ë'=>'e', 'Ë'=>'E', 'ÿ'=>'y',
+        'ý'=>'y', 'Ý'=>'Y', 'č'=>'c', 'š'=>'s', 'ž'=>'z',
+        // La Ç mayúscula sí está en el alfabeto de los SMS, pero la ç
+        // minúscula no. Se cambia por c para no perder la letra: "Provença"
+        // quedaría en "Provena", que no se entiende.
+        'ç'=>'c',
+        'Ã'=>'A', 'Õ'=>'O', 'ŕ'=>'r', 'ŀ'=>'l',
+        'º'=>'o', 'ª'=>'a',
+        // Comillas y rayas que mete Word y los móviles
+        '“'=>'"', '”'=>'"', '„'=>'"', '«'=>'"', '»'=>'"',
+        '‘'=>"'", '’'=>"'", '‚'=>"'", '´'=>"'", '`'=>"'",
+        '–'=>'-', '—'=>'-', '‑'=>'-', '−'=>'-',
+        '…'=>'...', '•'=>'-', '·'=>'.', '°'=>'o',
+        '™'=>'TM', '©'=>'(c)', '®'=>'(r)', '½'=>'1/2', '¼'=>'1/4',
+        "\xC2\xA0" => ' ',      // espacio duro
+        "\xE2\x82\xAC" => '€',  // el euro sí cabe (ocupa dos)
+    ];
+
+    $texto = strtr($texto, $cambios);
+
+    // Lo que quede fuera del alfabeto (emojis y demás) se elimina.
+    $permitido = sms_alfabeto_gsm() . sms_alfabeto_gsm_extendido();
+    $salida    = '';
+
+    foreach (preg_split('//u', $texto, -1, PREG_SPLIT_NO_EMPTY) as $c) {
+        if (mb_strpos($permitido, $c) !== false) {
+            $salida .= $c;
+        } elseif (trim($c) === '') {
+            $salida .= ' ';         // cualquier espacio raro pasa a espacio normal
+        }
+        // el resto se descarta
+    }
+
+    // Espacios repetidos que hayan quedado al quitar cosas.
+    return trim(preg_replace('/ {2,}/', ' ', $salida));
+}
+
+/**
+ * Cuántos SMS cobra la operadora por este texto, y en qué alfabeto va.
+ * Devuelve ['unicode' => bool, 'largo' => int, 'partes' => int]
+ */
+function sms_partes($texto)
+{
+    $base = sms_alfabeto_gsm();
+    $ext  = sms_alfabeto_gsm_extendido();
+
+    $largo = 0;
+    $esGsm = true;
+
+    foreach (preg_split('//u', $texto, -1, PREG_SPLIT_NO_EMPTY) as $c) {
+        if (mb_strpos($base, $c) !== false)      { $largo += 1; }
+        elseif (mb_strpos($ext, $c) !== false)   { $largo += 2; }
+        else { $esGsm = false; break; }
+    }
+
+    if ($esGsm) {
+        return [
+            'unicode' => false,
+            'largo'   => $largo,
+            'partes'  => $largo === 0 ? 0 : ($largo <= 160 ? 1 : (int) ceil($largo / 153)),
+        ];
+    }
+
+    $largo = mb_strlen($texto, 'UTF-8');
+
+    return [
+        'unicode' => true,
+        'largo'   => $largo,
+        'partes'  => $largo === 0 ? 0 : ($largo <= 70 ? 1 : (int) ceil($largo / 67)),
+    ];
+}
+
 /** Saca los teléfonos de un texto pegado o de un CSV, ya limpios y sin repetidos. */
 function sms_extraer_telefonos($texto)
 {

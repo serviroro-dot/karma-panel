@@ -38,6 +38,30 @@ try {
             if ($texto === '') {
                 throw new Exception('Escribe el mensaje.');
             }
+
+            /*
+             * UN SOLO SMS POR PERSONA.
+             *
+             * Se limpia el texto (tildes de á/í/ó/ú, comillas de Word,
+             * emojis) para que quepa de verdad en 160 caracteres, y se
+             * comprueba aquí, en el servidor. Si el navegador fallara o
+             * alguien saltara la pantalla, sigue sin poder colarse un
+             * mensaje que se cobre doble.
+             */
+            if (!empty($cfg['quitar_tildes'])) {
+                $texto = sms_a_gsm($texto);
+            }
+
+            $medida = sms_partes($texto);
+
+            if (!empty($cfg['forzar_un_sms']) && $medida['partes'] > 1) {
+                throw new Exception(
+                    'El mensaje ocupa ' . $medida['partes'] . ' SMS por persona y se cobraría '
+                    . $medida['partes'] . ' veces. Máximo 160 caracteres. Ahora tiene '
+                    . $medida['largo'] . '. Recórtalo en '
+                    . ($medida['largo'] - 160) . ' caracteres.'
+                );
+            }
             if (strlen($token) !== 40) {
                 throw new Exception('Petición no válida. Recarga la página.');
             }

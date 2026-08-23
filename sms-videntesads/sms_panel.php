@@ -114,7 +114,7 @@ $token = bin2hex(random_bytes(20));
     <div class="caja">
       <!-- UNA sola caja para el mensaje. No hay ninguna otra en la página. -->
       <label for="texto">Mensaje</label>
-      <textarea id="texto" maxlength="800" placeholder="Escribe aquí el SMS..."></textarea>
+      <textarea id="texto" maxlength="400" placeholder="Escribe aquí el SMS..."></textarea>
       <div class="contador"><span id="cChars">0</span> caracteres · <span id="cPartes">0</span> SMS por persona</div>
       <div class="aviso oculto" id="avisoTildes"></div>
     </div>
@@ -226,29 +226,64 @@ $token = bin2hex(random_bytes(20));
              partes: txt.length === 0 ? 0 : (txt.length <= 70 ? 1 : Math.ceil(txt.length / 67)) };
   }
 
-  function refrescarContadores() {
-    var r     = calcularSms(texto.value);
-    var nums  = limpiarNumeros(numeros.value);
-    var aviso = document.getElementById('avisoTildes');
+  /*
+   * Cambia lo que no cabe en el alfabeto de los SMS por lo que sí cabe.
+   * Es lo mismo que hace el servidor: aquí solo para que ella lo vea
+   * mientras escribe.
+   */
+  var CAMBIOS = {
+    'á':'a','í':'i','ó':'o','ú':'u','Á':'A','Í':'I','Ó':'O','Ú':'U',
+    'â':'a','ê':'e','î':'i','ô':'o','û':'u','ã':'a','õ':'o',
+    'ï':'i','ë':'e','ÿ':'y','ý':'y',
+    '“':'"','”':'"','„':'"','«':'"','»':'"',
+    '‘':"'",'’':"'",'‚':"'",'´':"'",'`':"'",
+    '–':'-','—':'-','−':'-','…':'...','•':'-','·':'.','°':'o',
+    ' ':' '
+  };
 
-    document.getElementById('cChars').textContent  = r.largo;
-    document.getElementById('cPartes').textContent = r.partes;
+  function aGsm(txt) {
+    var salida = '', i, c;
+
+    for (i = 0; i < txt.length; i++) {
+      c = txt.charAt(i);
+      if (CAMBIOS[c] !== undefined) { c = CAMBIOS[c]; salida += c; continue; }
+      if (GSM_BASE.indexOf(c) !== -1 || GSM_EXT.indexOf(c) !== -1) { salida += c; continue; }
+      if (c.trim() === '') { salida += ' '; }
+      // lo demás (emojis) se cae
+    }
+
+    return salida.replace(/ {2,}/g, ' ');
+  }
+
+  function refrescarContadores() {
+    var limpio = aGsm(texto.value);
+    var r      = calcularSms(limpio);
+    var nums   = limpiarNumeros(numeros.value);
+    var aviso  = document.getElementById('avisoTildes');
+    var quedan = 160 - r.largo;
+
+    document.getElementById('cChars').textContent  = r.largo + ' de 160';
+    document.getElementById('cPartes').textContent = Math.max(r.partes, 1);
     document.getElementById('cNums').textContent   = nums;
 
-    if (r.unicode && r.largo > 0) {
-      aviso.innerHTML = 'Tu mensaje lleva alguna <b>tilde de las caras</b> (á, í, ó, ú), '
-        + 'un emoji o una comilla rara. Eso baja el límite de 160 a 70 caracteres, '
-        + 'así que se cobra como <b>' + r.partes + ' SMS por persona</b>'
-        + (nums ? ' — ' + (r.partes * nums) + ' cobrados para ' + nums + ' números' : '')
-        + '.<br>Quitando esas tildes se queda en '
-        + calcularSms(texto.value.replace(/[áíóú]/g, function (l) {
-            return { 'á': 'a', 'í': 'i', 'ó': 'o', 'ú': 'u' }[l];
-          })).partes + '.';
+    // No se puede enviar si se pasa: se cobraría doble.
+    btn.disabled = enviando || r.largo > 160;
+
+    if (r.largo > 160) {
+      aviso.innerHTML = '<b>Te has pasado ' + (r.largo - 160) + ' caracteres.</b> '
+        + 'Recórtalo y podrás enviar. Por encima de 160 cada persona cuenta como '
+        + r.partes + ' SMS'
+        + (nums ? ', o sea ' + (r.partes * nums) + ' cobrados en vez de ' + nums : '') + '.';
       aviso.classList.remove('oculto');
-    } else if (r.partes > 1) {
-      aviso.innerHTML = 'El mensaje pasa de 160 caracteres, así que se cobra como <b>'
-        + r.partes + ' SMS por persona</b>'
-        + (nums ? ' — ' + (r.partes * nums) + ' cobrados para ' + nums + ' números' : '') + '.';
+    } else if (limpio !== texto.value) {
+      aviso.innerHTML = 'He quitado las tildes de <b>á í ó ú</b> (y las comillas raras) '
+        + 'para que quepa en un solo SMS. Las de <b>ñ, ü, ç, é</b> se quedan, ésas sí caben.<br>'
+        + 'Se enviará así: «' + limpio.replace(/[<>&]/g, '') + '»'
+        + (nums ? '<br>Coste: ' + nums + ' SMS para ' + nums + ' números.' : '');
+      aviso.classList.remove('oculto');
+    } else if (quedan <= 25 && r.largo > 0) {
+      aviso.innerHTML = 'Te quedan <b>' + quedan + '</b> caracteres.'
+        + (nums ? ' Coste: ' + nums + ' SMS para ' + nums + ' números.' : '');
       aviso.classList.remove('oculto');
     } else {
       aviso.classList.add('oculto');

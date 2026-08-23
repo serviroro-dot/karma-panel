@@ -74,6 +74,25 @@ return [
     'max_intentos' => 3,
 
     // ---------------------------------------------------------------
+    // UN SOLO SMS POR PERSONA: 700 números = 700 cobrados.
+    //
+    // Twilio no cobra por persona, cobra por trozo de mensaje. Un SMS
+    // son 160 caracteres, pero SOLO si no llevas á, í, ó, ú, emojis ni
+    // las comillas curvas que pone Word: con una sola de ésas el límite
+    // baja a 70 y el mismo mensaje pasa a costar el doble.
+    //
+    // quitar_tildes: cambia á→a, í→i, ó→o, ú→u y las comillas raras, para
+    //   que el mensaje quepa de verdad en 160. Deja ñ, ü, ç y é, que ésas
+    //   sí caben.
+    // forzar_un_sms: si aun así pasa de 160, no deja enviarlo y avisa de
+    //   cuánto hay que recortar.
+    //
+    // Con las dos en true, 700 envíos son 700 mensajes cobrados, siempre.
+    // ---------------------------------------------------------------
+    'quitar_tildes' => true,
+    'forzar_un_sms' => true,
+
+    // ---------------------------------------------------------------
     // NO REPETIR: un mismo número no recibe dos veces.
     //
     // Dentro de un mismo envío nunca se repite, pase lo que pase. Esto
