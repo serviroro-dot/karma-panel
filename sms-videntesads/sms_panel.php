@@ -116,6 +116,7 @@ $token = bin2hex(random_bytes(20));
       <label for="texto">Mensaje</label>
       <textarea id="texto" maxlength="800" placeholder="Escribe aquí el SMS..."></textarea>
       <div class="contador"><span id="cChars">0</span> caracteres · <span id="cPartes">0</span> SMS por persona</div>
+      <div class="aviso oculto" id="avisoTildes"></div>
     </div>
 
     <div class="caja">
@@ -189,12 +190,69 @@ $token = bin2hex(random_bytes(20));
     return n;
   }
 
+  /*
+   * Cuántos SMS te cobran por este texto.
+   *
+   * Un SMS son 160 caracteres, pero SOLO si todas las letras están en el
+   * alfabeto reducido de los SMS. Ese alfabeto lleva é, è, à, ò, ù, ñ, ü,
+   * ç... pero NO lleva á, í, ó, ú. En cuanto aparece una de ésas, un emoji
+   * o unas comillas curvas de las que pone Word, el mensaje entero pasa a
+   * Unicode y el límite baja de 160 a 70. Ahí es donde la gente paga el
+   * doble sin enterarse.
+   */
+  var GSM_BASE = "@£$¥èéùìòÇ\nØø\rÅåΔ_"
+               + "ΦΓΛΩΠΨΣΘΞÆæßÉ"
+               + " !\"#¤%&'()*+,-./0123456789:;<=>?¡"
+               + "ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿"
+               + "abcdefghijklmnopqrstuvwxyzäöñüà";
+  var GSM_EXT  = "^{}\\[~]|€";
+
+  function calcularSms(txt) {
+    var esGsm = true, largo = 0, i, c;
+
+    for (i = 0; i < txt.length; i++) {
+      c = txt.charAt(i);
+      if      (GSM_BASE.indexOf(c) !== -1) { largo += 1; }
+      else if (GSM_EXT.indexOf(c)  !== -1) { largo += 2; }
+      else { esGsm = false; break; }
+    }
+
+    if (esGsm) {
+      return { unicode: false, largo: largo,
+               partes: largo === 0 ? 0 : (largo <= 160 ? 1 : Math.ceil(largo / 153)) };
+    }
+
+    return { unicode: true, largo: txt.length,
+             partes: txt.length === 0 ? 0 : (txt.length <= 70 ? 1 : Math.ceil(txt.length / 67)) };
+  }
+
   function refrescarContadores() {
-    var t = texto.value.length;
-    document.getElementById('cChars').textContent  = t;
-    // Un SMS son 160 caracteres; a partir de ahí van encadenados de 153.
-    document.getElementById('cPartes').textContent = t === 0 ? 0 : (t <= 160 ? 1 : Math.ceil(t / 153));
-    document.getElementById('cNums').textContent   = limpiarNumeros(numeros.value);
+    var r     = calcularSms(texto.value);
+    var nums  = limpiarNumeros(numeros.value);
+    var aviso = document.getElementById('avisoTildes');
+
+    document.getElementById('cChars').textContent  = r.largo;
+    document.getElementById('cPartes').textContent = r.partes;
+    document.getElementById('cNums').textContent   = nums;
+
+    if (r.unicode && r.largo > 0) {
+      aviso.innerHTML = 'Tu mensaje lleva alguna <b>tilde de las caras</b> (á, í, ó, ú), '
+        + 'un emoji o una comilla rara. Eso baja el límite de 160 a 70 caracteres, '
+        + 'así que se cobra como <b>' + r.partes + ' SMS por persona</b>'
+        + (nums ? ' — ' + (r.partes * nums) + ' cobrados para ' + nums + ' números' : '')
+        + '.<br>Quitando esas tildes se queda en '
+        + calcularSms(texto.value.replace(/[áíóú]/g, function (l) {
+            return { 'á': 'a', 'í': 'i', 'ó': 'o', 'ú': 'u' }[l];
+          })).partes + '.';
+      aviso.classList.remove('oculto');
+    } else if (r.partes > 1) {
+      aviso.innerHTML = 'El mensaje pasa de 160 caracteres, así que se cobra como <b>'
+        + r.partes + ' SMS por persona</b>'
+        + (nums ? ' — ' + (r.partes * nums) + ' cobrados para ' + nums + ' números' : '') + '.';
+      aviso.classList.remove('oculto');
+    } else {
+      aviso.classList.add('oculto');
+    }
   }
 
   texto.addEventListener('input', refrescarContadores);

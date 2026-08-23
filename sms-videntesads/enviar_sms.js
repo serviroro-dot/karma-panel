@@ -126,14 +126,51 @@ const pendientes = numeros.filter(n => !yaEnviados.has(n));
 
 /* ---------- 3. Resumen antes de empezar ---------- */
 
-const partes = MENSAJE.length <= 160 ? 1 : Math.ceil(MENSAJE.length / 153);
+/*
+ * Cuántos SMS te cobran por este texto.
+ *
+ * Caben 160 caracteres, pero SOLO si todas las letras están en el alfabeto
+ * reducido de los SMS. Ese alfabeto lleva é, è, à, ò, ù, ñ, ü, ç... pero NO
+ * lleva á, í, ó, ú. Con una sola de ésas (o un emoji, o una comilla curva de
+ * las de Word) el mensaje entero pasa a Unicode y el límite baja a 70.
+ * Escribir "más" en vez de "mas" puede doblarte la factura.
+ */
+const GSM_BASE = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?"
+               + "¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
+const GSM_EXT  = "^{}\\[~]|€";
+
+function calcularSms(txt) {
+  let esGsm = true, largo = 0;
+  for (const c of txt) {
+    if      (GSM_BASE.includes(c)) { largo += 1; }
+    else if (GSM_EXT.includes(c))  { largo += 2; }
+    else { esGsm = false; break; }
+  }
+  if (esGsm) {
+    return { unicode: false, largo, partes: largo <= 160 ? 1 : Math.ceil(largo / 153) };
+  }
+  const l = [...txt].reduce((n, c) => n + (c.codePointAt(0) > 0xffff ? 2 : 1), 0);
+  return { unicode: true, largo: l, partes: l <= 70 ? 1 : Math.ceil(l / 67) };
+}
+
+const calc   = calcularSms(MENSAJE);
+const partes = calc.partes;
 const segs   = Math.round(pendientes.length / POR_SEGUNDO);
 const tiempo = segs < 90 ? segs + ' segundos' : Math.round(segs / 60) + ' minutos';
 
 console.log('');
 console.log('  ────────────────────────────────────────────');
 console.log('   Mensaje    : ' + MENSAJE.replace(/\n/g, ' ⏎ ').slice(0, 60) + (MENSAJE.length > 60 ? '…' : ''));
-console.log('   Longitud   : ' + MENSAJE.length + ' caracteres · ' + partes + ' SMS por persona');
+console.log('   Longitud   : ' + calc.largo + ' caracteres · ' + partes + ' SMS por persona');
+if (calc.unicode) {
+  const sinTildes = calcularSms(MENSAJE.replace(/[áíóú]/g, l => ({ á: 'a', í: 'i', ó: 'o', ú: 'u' }[l])));
+  console.log('   ⚠ AVISO    : lleva á/í/ó/ú, un emoji o una comilla rara.');
+  console.log('                Eso baja el límite de 160 a 70 caracteres.');
+  console.log('                Te cobrarán ' + (partes * pendientes.length) + ' SMS en vez de ' + pendientes.length + '.');
+  if (sinTildes.partes < partes) {
+    console.log('                Quitando esas tildes bajaría a ' + (sinTildes.partes * pendientes.length) + '.');
+  }
+}
 console.log('   En la lista: ' + numeros.length + ' números válidos');
 if (invalidos.length)  console.log('   Descartados: ' + invalidos.length + ' (no son teléfonos)');
 if (yaEnviados.size)   console.log('   Ya enviados: ' + yaEnviados.size + ' (de una vez anterior, se saltan)');
