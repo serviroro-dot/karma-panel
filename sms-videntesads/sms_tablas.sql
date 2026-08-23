@@ -26,9 +26,14 @@ CREATE TABLE IF NOT EXISTS sms_cola (
     lote        CHAR(32)       NULL,
     actualizado DATETIME       NULL,
     -- Un mismo teléfono no puede entrar dos veces en el mismo envío.
+    -- Esto lo garantiza la base de datos, no el programa: aunque algo
+    -- fallara arriba, aquí no entra el repetido.
     UNIQUE KEY uq_envio_tel (envio_id, telefono),
     KEY ix_trabajo (estado, envio_id),
-    KEY ix_lote (lote)
+    KEY ix_lote (lote),
+    -- Para poder preguntar rápido "¿a este número le mandé algo hoy?"
+    -- aunque haya cientos de miles de filas.
+    KEY ix_tel_reciente (telefono, estado, actualizado)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 

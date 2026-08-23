@@ -8,7 +8,11 @@ function sms_config()
 {
     static $cfg = null;
     if ($cfg === null) {
-        $cfg = require __DIR__ . '/sms_config.php';
+        // SMS_CONFIG solo se usa en las pruebas, para apuntar a una
+        // configuración de mentira. En tu servidor nunca está puesta, así
+        // que siempre lee sms_config.php.
+        $ruta = getenv('SMS_CONFIG');
+        $cfg  = require (($ruta && is_readable($ruta)) ? $ruta : __DIR__ . '/sms_config.php');
     }
     return $cfg;
 }
@@ -88,6 +92,30 @@ function sms_extraer_telefonos($texto)
     return array_keys($out);
 }
 
+/**
+ * Ejecuta una consulta "... IN (...)" por tandas y devuelve los teléfonos
+ * encontrados como claves de un array.
+ *
+ * Va por tandas a propósito: una lista de 50.000 números metida de golpe en
+ * un IN pasa del tamaño máximo de consulta que admite MySQL y falla. Así
+ * puede entrar una lista tan grande como quiera.
+ */
+function sms_buscar_en_columna($db, $sqlHastaElIn, array $telefonos, $porTanda = 500)
+{
+    $encontrados = [];
+
+    foreach (array_chunk($telefonos, $porTanda) as $tanda) {
+        $marcas = implode(',', array_fill(0, count($tanda), '?'));
+        $st = $db->prepare($sqlHastaElIn . " ({$marcas})");
+        $st->execute($tanda);
+        foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $tel) {
+            $encontrados[$tel] = true;
+        }
+    }
+
+    return $encontrados;
+}
+
 /** ¿Está de baja? */
 function sms_esta_de_baja($telefono)
 {
@@ -138,6 +166,18 @@ function sms_enviar($telefono, $texto)
             return sms_enviar_labsmobile($telefono, $texto, $cfg['labsmobile']);
         case 'generico':
             return sms_enviar_generico($telefono, $texto, $cfg['generico']);
+
+        case 'falsa':
+            // Solo para las pruebas: no manda nada, apunta cuántas órdenes
+            // ha recibido para poder contarlas después.
+            $f = fopen(sys_get_temp_dir() . '/sms_falsos.log', 'a');
+            if ($f) {
+                flock($f, LOCK_EX);
+                fwrite($f, $telefono . "\n");
+                flock($f, LOCK_UN);
+                fclose($f);
+            }
+            return ['ok' => true, 'id' => 'falso', 'error' => '', 'reintentable' => false];
     }
 
     return ['ok' => false, 'id' => '', 'error' => 'pasarela no configurada', 'reintentable' => false];

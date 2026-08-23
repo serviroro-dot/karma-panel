@@ -28,7 +28,19 @@ if (!$candado || !flock($candado, LOCK_EX | LOCK_NB)) {
 $porSegundo = max(1, (int) $cfg['por_segundo']);
 $esperaUs   = (int) (1000000 / $porSegundo);
 $maxIntent  = max(1, (int) $cfg['max_intentos']);
-$lote       = max(1, (int) $cfg['lote']);
+
+/*
+ * Cuántos coge en esta pasada.
+ *
+ * El cron lo llama cada minuto, así que coge los que le dé tiempo a mandar
+ * en algo menos de un minuto al ritmo configurado. No es un tope de la
+ * campaña: la cola entera se va vaciando pasada tras pasada, tenga 700
+ * mensajes o 50.000. Solo marca cuántos entran por tanda.
+ */
+$lote = max(1, $porSegundo * 55);
+
+// El trabajador no debe morir a medias por el límite de tiempo de PHP.
+@set_time_limit(0);
 
 // Marca de este lote, para saber cuáles he cogido yo.
 $marca = bin2hex(random_bytes(16));

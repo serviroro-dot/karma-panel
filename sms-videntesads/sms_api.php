@@ -42,25 +42,50 @@ try {
                 throw new Exception('Petición no válida. Recarga la página.');
             }
 
+            // Aquí ya vienen limpios y SIN REPETIDOS: si el mismo teléfono
+            // aparece diez veces en la lista, sale una sola vez.
             $telefonos = sms_extraer_telefonos($lista);
             if (!$telefonos) {
                 throw new Exception('No he encontrado ningún teléfono válido en la lista.');
             }
 
-            // Fuera los que están de baja.
-            $bajas = [];
-            $marcas = implode(',', array_fill(0, count($telefonos), '?'));
-            $st = $db->prepare("SELECT telefono FROM sms_bajas WHERE telefono IN ($marcas)");
-            $st->execute($telefonos);
-            foreach ($st->fetchAll() as $b) {
-                $bajas[$b['telefono']] = true;
+            $tope = (int) $cfg['tope_por_envio'];
+            if ($tope > 0 && count($telefonos) > $tope) {
+                throw new Exception('La lista trae ' . count($telefonos) . ' números y el tope está en ' . $tope . '.');
             }
-            $telefonos = array_values(array_filter($telefonos, function ($t) use ($bajas) {
-                return !isset($bajas[$t]);
+
+            $enLista = count($telefonos);
+
+            // Fuera los que están de baja. La consulta va por tandas: con
+            // una lista de 50.000 números, meterlos todos en un solo IN
+            // reventaría la consulta.
+            $bajas = sms_buscar_en_columna($db, 'SELECT telefono FROM sms_bajas WHERE telefono IN', $telefonos);
+
+            // Fuera también los que ya recibieron algo hace poco, aunque
+            // fuera de otro envío distinto. Es lo que garantiza que a cada
+            // número le llegue UN solo mensaje.
+            $repetidos = [];
+            $horas = (int) $cfg['no_repetir_horas'];
+            if ($horas > 0) {
+                $repetidos = sms_buscar_en_columna(
+                    $db,
+                    "SELECT DISTINCT telefono FROM sms_cola
+                      WHERE estado IN ('enviado','enviando','pendiente')
+                        AND actualizado > DATE_SUB(NOW(), INTERVAL {$horas} HOUR)
+                        AND telefono IN",
+                    $telefonos
+                );
+            }
+
+            $telefonos = array_values(array_filter($telefonos, function ($t) use ($bajas, $repetidos) {
+                return !isset($bajas[$t]) && !isset($repetidos[$t]);
             }));
 
             if (!$telefonos) {
-                throw new Exception('Todos los números de la lista están dados de baja.');
+                throw new Exception(
+                    'No queda ningún número al que mandar: ' . count($bajas) . ' están de baja y '
+                    . count($repetidos) . ' ya recibieron un mensaje en las últimas ' . $horas . ' horas.'
+                );
             }
 
             $db->beginTransaction();
@@ -89,19 +114,36 @@ try {
             ]);
             $envioId = (int) $db->lastInsertId();
 
-            // INSERT IGNORE + índice único: aunque la lista traiga repetidos,
-            // cada teléfono entra una sola vez.
-            $ins = $db->prepare("INSERT IGNORE INTO sms_cola (envio_id, telefono, actualizado) VALUES (?, ?, NOW())");
-            foreach ($telefonos as $t) {
-                $ins->execute([$envioId, $t]);
+            // Se insertan por tandas de 500 en una sola sentencia cada una.
+            // De uno en uno, 50.000 números tardarían minutos; así son
+            // segundos. INSERT IGNORE + el índice único de la tabla son la
+            // última red: aunque algo se colara repetido, no entra dos veces.
+            foreach (array_chunk($telefonos, 500) as $tanda) {
+                $valores = implode(',', array_fill(0, count($tanda), '(?, ?, NOW())'));
+                $datos   = [];
+                foreach ($tanda as $t) {
+                    $datos[] = $envioId;
+                    $datos[] = $t;
+                }
+                $db->prepare("INSERT IGNORE INTO sms_cola (envio_id, telefono, actualizado) VALUES {$valores}")
+                   ->execute($datos);
             }
+
+            // El total real es lo que de verdad ha entrado en la cola.
+            $st = $db->prepare("SELECT COUNT(*) FROM sms_cola WHERE envio_id = ?");
+            $st->execute([$envioId]);
+            $total = (int) $st->fetchColumn();
+
+            $db->prepare("UPDATE sms_envios SET total = ? WHERE id = ?")->execute([$total, $envioId]);
 
             $db->commit();
 
             echo json_encode([
-                'envio_id'  => $envioId,
-                'total'     => count($telefonos),
+                'envio_id'             => $envioId,
+                'total'                => $total,
+                'en_la_lista'          => $enLista,
                 'descartados_por_baja' => count($bajas),
+                'descartados_por_repetido' => count($repetidos),
             ]);
             break;
 

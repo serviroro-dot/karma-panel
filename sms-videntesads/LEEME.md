@@ -5,6 +5,31 @@ la pantalla en vivo y la lista de bajas.
 
 ---
 
+## Un solo SMS por número, y sin tope de cuántos mandas
+
+**A cada número le llega uno y solo uno.** Hay tres cierres, uno detrás de otro:
+
+1. Al pegar la lista se quitan los repetidos, y da igual cómo estén escritos:
+   `600111222`, `+34600111222` y `0034600111222` son el mismo teléfono y
+   cuentan como uno.
+2. La tabla tiene un candado (índice único) que impide físicamente meter el
+   mismo número dos veces en el mismo envío, aunque algo fallara antes.
+3. Si el mismo teléfono aparece en **otro envío distinto** y ya recibió algo
+   en las últimas horas, se salta. Lo controla `no_repetir_horas` en la
+   configuración: 24 significa un mensaje por número y día. Ponlo a 0 si
+   alguna vez quieres poder mandarle dos cosas distintas el mismo día.
+
+**No hay tope de cuántos cargas.** Puedes pegar 700, 5.000 o 50.000: entran
+todos de una vez. Lo comprobé con 5.000 y tardan una décima de segundo en
+quedar encolados.
+
+Lo único que no depende de este programa es la **velocidad de salida**, que la
+marca Twilio: con un número normal, un mensaje por segundo. Eso no es un tope
+de cuántos puedes mandar, sino del rato que tardan en salir. 700 son unos 12
+minutos; 5.000, hora y media. Mientras tanto no tienes que hacer nada.
+
+---
+
 ## Por qué ya no se puede mandar un SMS dos veces
 
 El fallo que tienes ahora se puede colar por cuatro sitios distintos. Aquí
@@ -140,3 +165,23 @@ Antes de tocar nada, copia de seguridad:
 ```bash
 cp chat.php chat.php.bak-$(date +%F)
 ```
+
+---
+
+## Comprobarlo tú mismo
+
+No hace falta creerse nada. Hay dos bancos de pruebas incluidos:
+
+```bash
+# La cola: un SMS por número, 5.000 de una vez, varios procesos a la vez.
+# Necesita una base de datos de pruebas; ajusta los datos de arriba del archivo.
+php probar_cola.php
+
+# El blindaje del navegador: reproduce el envío doble y comprueba que se corta.
+# Necesita Node y Chromium.
+node probar_anti_doble.js
+```
+
+Al escribir esto, las dos baterías pasan enteras: trece comprobaciones cada
+una. La de la cola incluye una prueba con **5.000 números** y otra lanzando
+**tres trabajadores a la vez**, para confirmar que ni así se duplica ninguno.

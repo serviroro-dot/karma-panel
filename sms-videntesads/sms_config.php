@@ -70,11 +70,32 @@ return [
     // Si tu proveedor te permite más, súbelo.
     'por_segundo' => 1,
 
-    // Cuántos coge el trabajador en cada pasada. No lo toques salvo motivo.
-    'lote' => 60,
-
     // Reintentos cuando el fallo es temporal (la pasarela caída, sin red...).
     'max_intentos' => 3,
+
+    // ---------------------------------------------------------------
+    // NO REPETIR: un mismo número no recibe dos veces.
+    //
+    // Dentro de un mismo envío nunca se repite, pase lo que pase. Esto
+    // es para el caso de que el mismo teléfono aparezca en DOS envíos
+    // distintos: si ya le mandaste algo en las últimas X horas, se salta.
+    //
+    // 24 = un mensaje por número y día.
+    //  0 = desactivado (podría recibir de dos envíos distintos).
+    // ---------------------------------------------------------------
+    'no_repetir_horas' => 24,
+
+    // ---------------------------------------------------------------
+    // SIN LÍMITE de cuántos se cargan de una vez.
+    //
+    // Puedes pegar 700, 5.000 o 50.000: entran todos. Lo único que
+    // cambia es el rato que tardan en salir, porque el ritmo lo marca
+    // la pasarela ('por_segundo' de arriba), no este programa.
+    //
+    // Deja 0 para no poner tope. Si algún día quieres una red de
+    // seguridad contra un pegado accidental, pon aquí un número.
+    // ---------------------------------------------------------------
+    'tope_por_envio' => 0,
 
     // ---------------------------------------------------------------
     // 4) País por defecto para los números que vengan sin prefijo
