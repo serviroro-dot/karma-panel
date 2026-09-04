@@ -25,6 +25,7 @@
     --busy:        #d03b3b;
     --dnd:         #ec835a;
     --off:         #8794a1;
+    --block:       #4b5563;
     --grid:        #e4e8ed;
     --shadow:      0 1px 2px rgba(16,20,24,.06), 0 4px 14px rgba(16,20,24,.05);
   }
@@ -42,6 +43,7 @@
       --accent-ink: #331420;
       --serie-1: #3987e5;
       --serie-2: #d95926;
+      --block:  #8794a1;
       --grid:   #232b33;
       --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.3);
     }
@@ -59,6 +61,7 @@
     --accent-ink: #331420;
     --serie-1: #3987e5;
     --serie-2: #d95926;
+    --block:  #8794a1;
     --grid:   #232b33;
     --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.3);
   }
@@ -112,6 +115,7 @@
   .dot.busy { background: var(--busy); }
   .dot.dnd  { background: var(--dnd); }
   .dot.off  { background: var(--off); }
+  .dot.block { background: var(--block); }
   @media (prefers-reduced-motion: no-preference) {
     .dot.live { animation: pulse 2s ease-in-out infinite; }
     @keyframes pulse { 50% { opacity: .45; } }
@@ -188,6 +192,9 @@
   .ext .quien { min-width: 0; }
   .ext .nombre { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ext .st { font-size: 11.5px; color: var(--ink-2); display: flex; align-items: center; gap: 5px; }
+  .ext--block { opacity: .7; }
+  .ext--block .num { color: var(--ink-3); background: color-mix(in srgb, var(--ink-3) 12%, transparent); }
+  .ext--block .st { font-weight: 600; }
 
   .leyenda { display: flex; gap: 16px; margin: 2px 0 10px; font-size: 12.5px; color: var(--ink-2); }
   .leyenda .chip { display: inline-flex; align-items: center; gap: 6px; }
@@ -270,7 +277,7 @@
     { num: "101", nombre: "María G.",       estado: "disponible" },
     { num: "102", nombre: "Jorge P.",       estado: "llamada" },
     { num: "103", nombre: "Lucía R.",       estado: "disponible" },
-    { num: "104", nombre: "Andrés T.",      estado: "timbrando" },
+    { num: "104", nombre: "Monica",         estado: "bloqueada" },
     { num: "105", nombre: "Sala reuniones", estado: "disponible" },
     { num: "106", nombre: "Carmen V.",      estado: "dnd" },
     { num: "107", nombre: "Soporte N1",     estado: "llamada" },
@@ -285,14 +292,14 @@
     llamada:    { cls: "busy", txt: "En llamada" },
     timbrando:  { cls: "warn", txt: "Timbrando" },
     dnd:        { cls: "dnd",  txt: "No molestar" },
-    off:        { cls: "off",  txt: "Sin registrar" }
+    off:        { cls: "off",  txt: "Sin registrar" },
+    bloqueada:  { cls: "block", txt: "Bloqueada" }
   };
 
   var ACTIVAS = [
     { origen: "612 448 190", destino: "102 · Jorge P.",   via: "Cola Soporte",  estado: "llamada",   seg: 154 },
     { origen: "934 002 118", destino: "109 · Ventas 1",   via: "Cola Ventas",   estado: "llamada",   seg: 412 },
-    { origen: "100 · Recepción", destino: "689 233 704",  via: "Troncal NetVoz", estado: "llamada",  seg: 67 },
-    { origen: "655 781 342", destino: "104 · Andrés T.",  via: "Cola Soporte",  estado: "timbrando", seg: 9 }
+    { origen: "100 · Recepción", destino: "689 233 704",  via: "Troncal NetVoz", estado: "llamada",  seg: 67 }
   ];
 
   var COLAS = [
@@ -320,7 +327,8 @@
   function renderExts() {
     $("exts").innerHTML = EXTS.map(function (e) {
       var st = ESTADOS[e.estado];
-      return '<div class="ext">' +
+      var extCls = e.estado === "bloqueada" ? " ext--block" : "";
+      return '<div class="ext' + extCls + '">' +
         '<span class="num mono">' + e.num + '</span>' +
         '<span class="quien"><span class="nombre">' + e.nombre + '</span>' +
         '<span class="st"><span class="dot ' + st.cls + '"></span>' + st.txt + '</span></span></div>';
