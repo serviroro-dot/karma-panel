@@ -504,3 +504,20 @@ contexto y devolviendo Context a `from-pstn`.
 
 Pendiente: confirmar el número de cola y el OK de la propietaria antes
 de aplicar.
+
+---
+
+## 13. Aplicación (2026-09-07)
+
+- ✅ **Cambio 1 aplicado y verificado**: contexto `from-callcenter3` cargado
+  (`dialplan show` lo lista con `Goto(ext-queues,600,1)`; cola 600 =
+  operadoras, confirmada con `queue show`: C:8906, SL 100%).
+- ⚠️ El bloque se pegó **dos veces**, por lo que quedó duplicado en
+  `extensions_custom.conf` (Asterisk ignora el duplicado con un warning;
+  funcionalmente correcto). Limpieza: restaurar el backup de la segunda
+  pasada, que contiene exactamente una copia.
+- ⏳ **Cambio 2 pendiente de confirmar**: Context del troncal `callcenter3`
+  → `from-callcenter3` en el panel + Apply Config. Verificación:
+  `pjsip show endpoint callcenter3 | grep context`.
+- Hoja de conexión entregable al call center: ver sección 11 (destino
+  indiferente gracias al enrutado por troncal).
