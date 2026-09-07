@@ -314,3 +314,41 @@ sentido o mudo**.
 La contraseña de `callcenter3` ha viajado por el chat en texto plano. No
 está guardada en este repositorio a propósito. Si ese canal no es privado,
 rótala en el servidor remoto antes de poner el troncal en producción.
+
+---
+
+## 9. Verificación en vivo del servidor (2026-09-07)
+
+Salida real obtenida por SSH en `51.178.142.43` (root@vps-36f72249):
+
+| Dato | Valor verificado |
+|---|---|
+| SO | Debian GNU/Linux 12 (bookworm) |
+| FreePBX | **17.0.33** (`fwconsole` responde) |
+| Asterisk | **22.8.2** |
+| FreeSWITCH | `inactive` — este servidor **no** es el FusionPBX |
+| Endpoint `callcenter3` | **Existe** en este Asterisk |
+| Auth | `InAuth: callcenter3/callcenter3` → el servidor **recibe** el registro |
+| AOR | `max_contacts = 1` (el «1 teléfono» de la hoja) |
+| Estado | `Unavailable, 0 of inf` → **nadie registrado ahora mismo** |
+| Transporte | `0.0.0.0-udp`, puerto 5060 |
+
+### Lectura
+
+`51.178.142.43` es el **FreePBX 17**. La cuenta `callcenter3` no es un
+troncal hacia fuera: es una cuenta local con autenticación **entrante**
+(patrón de extensión de FreePBX: endpoint + inauth + aor con
+`max_contacts=1`). La «hoja de troncal» del inicio son en realidad las
+credenciales para que otro equipo **se registre contra este FreePBX**.
+
+Como `chan_sip` no existe en Asterisk 22, todo lo que se haga aquí es
+pjsip obligatoriamente (coherente con la sección 3).
+
+### Queda pendiente
+
+1. IP del FusionPBX (la otra centralita, la que consumirá el troncal).
+2. Clasificar `callcenter3`: extensión (`context=from-internal`) o troncal
+   con registro entrante (`context=from-pstn`/`from-trunk`). Comando:
+   `asterisk -rx "pjsip show endpoint callcenter3" | grep -Ei "context|allow|callerid|max_contacts"`
+3. Decisión de diseño: troncal IP-a-IP sin registro (recomendado) o
+   registro del FusionPBX contra este FreePBX con una cuenta de troncal.
