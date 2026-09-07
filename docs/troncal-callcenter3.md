@@ -449,3 +449,58 @@ La puerta de enlace hacia `callcenter3` que se planteó en el FusionPBX
 `max_contacts=1`, un registro del FusionPBX ocuparía la única plaza y
 expulsaría el registro del call center (o pelearían entre sí). Si se
 llegó a crear, debe deshabilitarse.
+
+---
+
+## 12. Estado real de colas y rutas entrantes (2026-09-07)
+
+### Colas (`queue show`)
+
+- Cola de operadoras con agentes **110–116** (`Local/11X@from-queue`,
+  ringinuse enabled). El número de la cola quedó fuera de pantalla —
+  pendiente de confirmar (¿600?).
+- Todas las agentes **Unavailable** (último login ≈ 3,1 días antes;
+  extensiones sin registrar en ese momento). La 112 acumula 12 llamadas
+  históricas.
+- Cola `default` vacía (sin miembros), estrategia ringall.
+
+### Rutas entrantes (tabla `incoming`)
+
+| DID | Destino | Descripción |
+|---|---|---|
+| 34926658032 | app-mask-blanco | THOLA2 |
+| 34926658029 | app-mask-negro | DIDWW Ciudad Real |
+| 17862977477 | app-mask-rojo | DIDWWROJO |
+| 16468143537 | app-mask-verde | DIDWW VERDE |
+| 19176955393 | app-mask-azul | DIDWWAZUL |
+| 19183092106 | app-mask-rosa | DIDWWROSA |
+| 17243304022 | app-mask-amarillo | DIDWWAMARILLO |
+
+Todas las rutas son de DID específico hacia contextos custom
+`app-mask-*`; **no hay ruta catch-all**. Los 2 geográficos de Ciudad Real
+y 5 números US (DIDWW) no se tocan.
+
+### Diseño elegido para la entrada del call center
+
+Como no se sabe qué user/DID enviará el call center en el R-URI (y su
+numeración geográfica no puede tocarse), la ruta se fuerza **por troncal**,
+no por DID: contexto propio para el troncal `callcenter3` que manda todo
+lo que entre por él a la cola de operadoras, ignore el DID que ignore.
+
+```ini
+; /etc/asterisk/extensions_custom.conf
+[from-callcenter3]
+exten => _.,1,NoOp(Entrante del call center via troncal callcenter3)
+ same => n,Goto(ext-queues,<NUM_COLA>,1)
+exten => h,1,Hangup()
+```
+
+Más el cambio en GUI: Connectivity → Trunks → callcenter3 →
+Context = `from-callcenter3`, y Apply Config.
+
+Ventajas: cero interacción con las rutas DID existentes (aunque el call
+center presente el geográfico como destino), reversible borrando el
+contexto y devolviendo Context a `from-pstn`.
+
+Pendiente: confirmar el número de cola y el OK de la propietaria antes
+de aplicar.
