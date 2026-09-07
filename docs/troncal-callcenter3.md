@@ -404,3 +404,48 @@ existente ya lo cumple a nivel de capacidad; queda por resolver:
 2. Las Inbound Routes del FreePBX para lo que entre.
 3. Limpieza recomendada de códecs: dejar `alaw,ulaw` (sobran gsm, g726,
    g722 y los de vídeo h264/mpeg4).
+
+---
+
+## 11. Extremo remoto identificado: un call center externo
+
+El otro extremo es **un call center externo** que enviará llamadas a la
+centralita. El troncal `callcenter3` tal y como existe es el diseño
+correcto para ese caso: troncal de registro entrante, canales ilimitados,
+`from-pstn` → Inbound Routes.
+
+### Hoja de conexión que se entrega al call center
+
+```
+Servidor (host) : 51.178.142.43
+Puerto          : 5060
+Transporte      : UDP
+Usuario / Auth  : callcenter3
+Contraseña      : (por canal seguro)
+Registro        : SÍ
+Códecs          : alaw, ulaw
+Llamadas simultáneas: sin límite por nuestro lado
+```
+
+### Datos a pedir al call center
+
+1. IP(s) públicas desde las que registran y envían llamadas (para
+   permitirlas en el firewall del FreePBX y que fail2ban no las banee).
+2. Qué enviarán como número de destino (DID / user del R-URI) y como
+   CallerID de la llamante.
+3. Volumen esperado de llamadas simultáneas.
+
+### Pendiente en el FreePBX (se aplicará con OK previo)
+
+1. Inbound Route para lo que el call center envíe → destino que decida
+   la propietaria (extensión / cola / IVR).
+2. Alta de la IP del call center en el firewall (zona Trusted).
+3. Limpieza de códecs del troncal: dejar `alaw,ulaw`.
+
+### Aviso importante
+
+La puerta de enlace hacia `callcenter3` que se planteó en el FusionPBX
+(sección de diseño anterior) **no debe crearse ni quedar activa**: con
+`max_contacts=1`, un registro del FusionPBX ocuparía la única plaza y
+expulsaría el registro del call center (o pelearían entre sí). Si se
+llegó a crear, debe deshabilitarse.
