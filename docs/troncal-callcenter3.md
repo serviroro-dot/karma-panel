@@ -352,3 +352,55 @@ pjsip obligatoriamente (coherente con la sección 3).
    `asterisk -rx "pjsip show endpoint callcenter3" | grep -Ei "context|allow|callerid|max_contacts"`
 3. Decisión de diseño: troncal IP-a-IP sin registro (recomendado) o
    registro del FusionPBX contra este FreePBX con una cuenta de troncal.
+
+---
+
+## 10. Segunda verificación: callcenter3 SÍ es un troncal (2026-09-07)
+
+Volcado real de `/etc/asterisk/pjsip.*.conf` en el FreePBX:
+
+```ini
+; pjsip.auth.conf
+[callcenter3]
+type=auth
+auth_type=userpass
+password=<OCULTA>
+username=callcenter3
+
+; pjsip.endpoint.conf
+[callcenter3]
+type=endpoint
+transport=0.0.0.0-udp
+context=from-pstn          ; ← patrón de TRONCAL, no de extensión
+disallow=all
+allow=ulaw,alaw,gsm,g726,g722,h264,mpeg4
+aors=callcenter3
+auth=callcenter3           ; ← autenticación ENTRANTE (recibe el registro)
+language=es
+direct_media=no
+rtp_symmetric=yes
+```
+
+### Corrección al análisis de la sección 2/9
+
+`callcenter3` **sí está definido como troncal** en FreePBX: troncal
+chan_pjsip con *Registration: Receive* + *Authentication: Inbound* y
+`context=from-pstn` (las llamadas que entren por él van a Inbound Routes).
+
+Y el matiz clave sobre el «1 teléfono»: `max_contacts=1` limita el número
+de **registros** (un solo equipo conectado a la vez), **no** las llamadas
+simultáneas. El propio `pjsip show endpoint` marca `0 of inf`: canales
+**ilimitados**. Un único peer registrado puede cursar N llamadas a la vez
+por este troncal tal y como está.
+
+### Requisito de la usuaria
+
+Troncal **solo de entrada**, con muchas llamadas simultáneas. El troncal
+existente ya lo cumple a nivel de capacidad; queda por resolver:
+
+1. **Quién es el otro extremo** que debe registrarse como `callcenter3`
+   (¿proveedor externo de numeración? ¿el FusionPBX propio?) — decide el
+   resto del diseño.
+2. Las Inbound Routes del FreePBX para lo que entre.
+3. Limpieza recomendada de códecs: dejar `alaw,ulaw` (sobran gsm, g726,
+   g722 y los de vídeo h264/mpeg4).
