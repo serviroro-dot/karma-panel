@@ -558,3 +558,28 @@ Mapa de troncales del FreePBX (tabla `trunks`): 1 didww, 2 didww_usa2,
    registrada para atenderla.
 4. Limpieza cosmética opcional: el bloque duplicado en
    `extensions_custom.conf` (restaurar el backup con una sola copia).
+
+---
+
+## 15. Dominio del servidor verificado (2026-09-07)
+
+La propietaria confirmó que el panel FreePBX se sirve en
+`https://benbusinesspy.fun/admin/config.php`. Verificación DNS desde la
+sesión:
+
+- `benbusinesspy.fun` → **A 51.178.142.43** ✅ (también `www`)
+- **Sin registro AAAA** → sin riesgo IPv6 (el transporte pjsip es
+  `0.0.0.0-udp`, solo IPv4)
+
+Por tanto la ficha del call center puede usar indistintamente:
+
+```
+Servidor (host) : benbusinesspy.fun     (o 51.178.142.43 — misma máquina)
+```
+
+Nada que cambiar en el FreePBX: la autenticación es por usuario/contraseña
+y el dominio solo es la forma de encontrarlo.
+
+⚠️ Operativa: mantener renovado el dominio `.fun` — si caduca, el call
+center dejará de resolver el servidor y las llamadas caerán (la IP
+seguiría funcionando como respaldo en la ficha).
