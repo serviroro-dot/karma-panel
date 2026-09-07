@@ -521,3 +521,40 @@ de aplicar.
   `pjsip show endpoint callcenter3 | grep context`.
 - Hoja de conexión entregable al call center: ver sección 11 (destino
   indiferente gracias al enrutado por troncal).
+
+---
+
+## 14. ✅ Troncal completado y verificado (2026-09-07)
+
+El panel de FreePBX no persistía el cambio de contexto, así que se aplicó
+directamente sobre la base de datos (misma fila que escribe el GUI) y se
+regeneró con `fwconsole reload`:
+
+```bash
+mysql asterisk -e "update pjsip set data='from-callcenter3' where id='5' and keyword='context';"
+fwconsole reload    # Reload Started ... Reload Complete
+asterisk -rx "pjsip show endpoint callcenter3" | grep -i " context"
+#  context : from-callcenter3   ← VERIFICADO en runtime
+```
+
+Estado final de la cadena completa:
+
+| Pieza | Estado |
+|---|---|
+| Troncal `callcenter3` (registro entrante, canales ilimitados) | ✅ existía |
+| Contexto `from-callcenter3` → `Goto(ext-queues,600,1)` | ✅ creado y cargado |
+| Troncal → contexto (`context=from-callcenter3`) | ✅ aplicado y verificado |
+| Rutas DID existentes (geográficos + DIDWW) | ✅ intactas |
+
+Mapa de troncales del FreePBX (tabla `trunks`): 1 didww, 2 didww_usa2,
+3 callcenter1, 4 callcenter2, 5 callcenter3 — solo se modificó la fila 5.
+
+### Pendiente (operativa, no de configuración)
+
+1. Entregar la hoja de conexión al call center (sección 11).
+2. Cuando registren: `pjsip show aor callcenter3` debe mostrar su IP en
+   `contact`. Si no aparece tras conectarse ellos, revisar firewall.
+3. Llamada de prueba → cola 600, con alguna operadora (110–116)
+   registrada para atenderla.
+4. Limpieza cosmética opcional: el bloque duplicado en
+   `extensions_custom.conf` (restaurar el backup con una sola copia).
